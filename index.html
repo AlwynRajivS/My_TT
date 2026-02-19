@@ -281,4 +281,230 @@ const DEFAULT = {
   Tuesday:  {2:{code:'VEC344',sec:'III ECE B',c:0}, 4:{code:'VEC345',sec:'III ECE B',c:3}, 6:{code:'VEC344',sec:'III ECE A',c:0}},
   Wednesday:{0:{code:'TM5',sec:'III ECE B',c:7}, 1:{code:'EC2451',sec:'IV ECE (Research Lab)',c:1}, 2:{code:'COUN',sec:'',c:4}, 3:{code:'EC2451',sec:'IV ECE (Research Lab)',c:1}, 5:{code:'EC2257',sec:'II ECE A',c:2}},
   Thursday: {0:{code:'TM5',sec:'III ECE B',c:7}, 2:{code:'VEC344',sec:'III ECE A',c:0}, 4:{code:'VEC345',sec:'III ECE B',c:3}},
-  Friday:   {1:{code:'VEC34
+  Friday:   {1:{code:'VEC344',sec:'III ECE A',c:0}, 4:{code:'EC2257',sec:'II ECE A',c:2}},
+  Saturday: {1:{code:'VEC344',sec:'III ECE A',c:0}, 7:{code:'VEC344',sec:'III ECE B',c:0}},
+};
+let data = cp(DEFAULT);
+let editMode=false, curCell=null, selColor=0;
+
+function cp(o){return JSON.parse(JSON.stringify(o))}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+/* ── BUILD ───────────────────────────────────────────────── */
+function buildHeaders(){
+  const ph=document.getElementById('ph'), th=document.getElementById('th2');
+  ph.innerHTML='<th>DAY</th>'; th.innerHTML='<th></th>';
+  periods.forEach((p,i)=>{
+    const a=document.createElement('th'); a.textContent=p.id; ph.appendChild(a);
+    const b=document.createElement('th'); b.textContent=p.s+' – '+p.e; th.appendChild(b);
+    if(BREAK_AFTER[i]!==undefined){
+      const c=document.createElement('th');
+      c.textContent=BREAK_AFTER[i];
+      c.style.cssText='color:#93c5fd;font-size:.57rem;letter-spacing:2px';
+      ph.appendChild(c);
+      th.appendChild(document.createElement('th'));
+    }
+  });
+}
+
+function buildBody(){
+  const tb=document.getElementById('tb'); tb.innerHTML='';
+  DAYS.forEach(day=>{
+    const tr=document.createElement('tr');
+    const td0=document.createElement('td'); td0.textContent=day.toUpperCase(); tr.appendChild(td0);
+    const dd=data[day]||{};
+    periods.forEach((p,i)=>{
+      const td=document.createElement('td');
+      const d=dd[i];
+      if(d){
+        const pal=PAL[d.c%PAL.length];
+        td.innerHTML=`<div class="cell-inner${editMode?' edit-mode':''}" data-d="${day}" data-i="${i}">
+          <div class="subject-pill" style="background:${pal.bg}">
+            <div class="subject-code" style="color:${pal.fg}">${esc(d.code)}</div>
+            ${d.sec?`<div class="section-label" style="color:${pal.fg}">${esc(d.sec)}</div>`:''}
+          </div></div>`;
+      } else {
+        td.innerHTML=`<div class="cell-inner${editMode?' edit-mode':''}" data-d="${day}" data-i="${i}"><div class="empty-dot"></div></div>`;
+      }
+      td.querySelector('.cell-inner').onclick=()=>onCell(day,i);
+      tr.appendChild(td);
+      if(BREAK_AFTER[i]!==undefined){
+        const tb2=document.createElement('td');
+        tb2.className='break-col';
+        tb2.innerHTML=`<div class="break-label">${BREAK_AFTER[i]}</div>`;
+        tr.appendChild(tb2);
+      }
+    });
+    tb.appendChild(tr);
+  });
+}
+
+function buildPeriodList(){
+  const pl=document.getElementById('periodList'); pl.innerHTML='';
+  periods.forEach((p,i)=>{
+    const tag=document.createElement('div'); tag.className='period-tag';
+    tag.innerHTML=`<span class="period-tag-num">${p.id}</span><span>${p.s} – ${p.e}</span><button class="period-tag-del" onclick="removePeriod(${i})" title="Remove">✕</button>`;
+    pl.appendChild(tag);
+  });
+  const sel=document.getElementById('npAfter');
+  sel.innerHTML='<option value="-1">At Beginning</option>';
+  periods.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent='After Period '+p.id;sel.appendChild(o);});
+}
+
+function buildTable(){buildHeaders();buildBody();buildPeriodList();updateBadge();}
+
+/* ── EDIT MODE ───────────────────────────────────────────── */
+function toggleEdit(){
+  editMode=!editMode;
+  const btn=document.getElementById('editToggleBtn'),hint=document.getElementById('editHint');
+  if(editMode){btn.textContent='🔒 Disable Editing';btn.className='btn btn-danger';hint.textContent='⚡ Click any slot to edit';hint.style.color='#059669';}
+  else{btn.textContent='✏️ Enable Editing';btn.className='btn btn-primary';hint.textContent='Enable editing to modify slots';hint.style.color='';}
+  buildBody();
+}
+
+/* ── SLOT MODAL ──────────────────────────────────────────── */
+function onCell(day,i){
+  if(!editMode)return;
+  curCell={day,i};
+  const d=(data[day]||{})[i];
+  document.getElementById('slotInfo').textContent=`${day} · Period ${periods[i]?.id} · ${periods[i]?.s} – ${periods[i]?.e}`;
+  document.getElementById('inpCode').value=d?d.code:'';
+  document.getElementById('inpSec').value=d?d.sec:'';
+  selColor=d?(d.c||0):0;
+  buildColorGrid('colorGrid',()=>{});
+  document.getElementById('slotModal').classList.add('active');
+}
+function closeSlotModal(){document.getElementById('slotModal').classList.remove('active');curCell=null;}
+function buildColorGrid(gid,cb){
+  const g=document.getElementById(gid); g.innerHTML='';
+  PAL.forEach((p,i)=>{
+    const c=document.createElement('div'); c.className='color-chip'+(i===selColor?' active':'');
+    c.style.background=`linear-gradient(135deg,${p.bg},${p.fg}33)`;
+    c.style.border=`2.5px solid ${p.fg}66`;
+    c.title=p.name;
+    c.onclick=()=>{selColor=i;document.querySelectorAll('#'+gid+' .color-chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');cb(i);};
+    g.appendChild(c);
+  });
+}
+function saveCell(){
+  if(!curCell)return;
+  const{day,i}=curCell, code=document.getElementById('inpCode').value.trim(), sec=document.getElementById('inpSec').value.trim();
+  if(!data[day])data[day]={};
+  if(code){data[day][i]={code,sec,c:selColor};}else{delete data[day][i];}
+  closeSlotModal(); buildBody(); toast('✓ Slot updated');
+}
+function clearCell(){
+  if(!curCell)return;
+  if(data[curCell.day])delete data[curCell.day][curCell.i];
+  closeSlotModal(); buildBody(); toast('Slot cleared');
+}
+/* ── LEGEND ──────────────────────────────────────────────── */
+function renderLegend(){
+  const g=document.getElementById('legendGrid'); g.innerHTML='';
+  legend.forEach(item=>{
+    const pal=PAL[item.c%PAL.length];
+    const el=document.createElement('div'); el.className='legend-item';
+    el.style.borderColor=pal.fg+'44';
+    el.innerHTML=`<div class="legend-color-dot" style="background:${pal.fg}"></div><span class="legend-item-code" style="color:${pal.fg}">${esc(item.code)}</span><span class="legend-item-desc">— ${esc(item.desc)}</span>`;
+    g.appendChild(el);
+  });
+}
+function openLegendModal(){
+  legendTemp=cp(legend); legSelColor=0;
+  renderLegEdit(); buildColorGrid('legColorGrid',idx=>legSelColor=idx);
+  document.getElementById('legendModal').classList.add('active');
+}
+function closeLegendModal(){document.getElementById('legendModal').classList.remove('active');}
+function renderLegEdit(){
+  const list=document.getElementById('legEditList'); list.innerHTML='';
+  legendTemp.forEach((item,i)=>{
+    const pal=PAL[item.c%PAL.length];
+    const row=document.createElement('div'); row.className='leg-edit-row';
+    row.innerHTML=`
+      <div style="width:12px;height:12px;border-radius:4px;background:${pal.fg};flex-shrink:0"></div>
+      <input class="leg-inp" value="${esc(item.code)}" style="width:88px" placeholder="Code" oninput="legendTemp[${i}].code=this.value">
+      <input class="leg-inp" value="${esc(item.desc)}" style="flex:1;min-width:100px" placeholder="Description" oninput="legendTemp[${i}].desc=this.value">
+      <select class="leg-sel" onchange="legendTemp[${i}].c=parseInt(this.value);renderLegEdit()">
+        ${PAL.map((p,pi)=>`<option value="${pi}"${pi===item.c?' selected':''}>${p.name}</option>`).join('')}
+      </select>
+      <button onclick="legendTemp.splice(${i},1);renderLegEdit()" style="background:var(--rose-lt);border:none;color:var(--rose);border-radius:7px;padding:5px 9px;cursor:pointer;font-weight:700;font-size:.8rem">✕</button>`;
+    list.appendChild(row);
+  });
+}
+function addLegEntry(){
+  const code=document.getElementById('legNewCode').value.trim(), desc=document.getElementById('legNewDesc').value.trim();
+  if(!code){toast('Enter a subject code');return;}
+  legendTemp.push({code,desc:desc||code,c:legSelColor});
+  renderLegEdit();
+  document.getElementById('legNewCode').value='';
+  document.getElementById('legNewDesc').value='';
+}
+function saveLegend(){legend=cp(legendTemp);renderLegend();closeLegendModal();toast('✓ Legend saved');}
+
+/* ── PERIOD MANAGEMENT ───────────────────────────────────── */
+function addPeriod(){
+  const name=document.getElementById('npName').value.trim();
+  const s=document.getElementById('npStart').value.trim();
+  const e=document.getElementById('npEnd').value.trim();
+  const after=parseInt(document.getElementById('npAfter').value);
+  if(!name||!s||!e){toast('Fill Period Label, Start & End Time');return;}
+  periods.splice(after+1,0,{id:name,s,e});
+  DAYS.forEach(day=>{
+    if(!data[day])return;
+    const nd={};
+    Object.entries(data[day]).forEach(([k,v])=>{const n=parseInt(k);nd[n>=after+1?n+1:n]=v;});
+    data[day]=nd;
+  });
+  document.getElementById('npName').value='';
+  document.getElementById('npStart').value='';
+  document.getElementById('npEnd').value='';
+  buildTable(); toast('✓ Period '+name+' added');
+}
+function removePeriod(idx){
+  if(periods.length<=1){toast('Cannot remove the last period');return;}
+  if(!confirm(`Remove Period ${periods[idx].id}? All slots in this period will be cleared.`))return;
+  periods.splice(idx,1);
+  DAYS.forEach(day=>{
+    if(!data[day])return;
+    const nd={};
+    Object.entries(data[day]).forEach(([k,v])=>{const n=parseInt(k);if(n===idx)return;nd[n>idx?n-1:n]=v;});
+    data[day]=nd;
+  });
+  buildTable(); toast('Period removed');
+}
+
+/* ── IMPORT / EXPORT / RESET ─────────────────────────────── */
+function exportData(){
+  const blob=new Blob([JSON.stringify({periods,legend,data},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='timetable_alwyn_rajiv.json';a.click();URL.revokeObjectURL(url);
+  toast('✓ Exported');
+}
+function importData(e){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{try{const o=JSON.parse(ev.target.result);if(o.periods)periods=o.periods;if(o.legend)legend=o.legend;if(o.data)data=o.data;buildTable();renderLegend();toast('✓ Imported');}catch{toast('⚠ Invalid JSON');}};
+  r.readAsText(file);e.target.value='';
+}
+function resetData(){
+  if(!confirm('Reset to original timetable?'))return;
+  data=cp(DEFAULT);
+  periods=[{id:'I',s:'9.10 AM',e:'10.00 AM'},{id:'II',s:'10.00 AM',e:'10.50 AM'},{id:'III',s:'11.10 AM',e:'12 NOON'},{id:'IV',s:'12 NOON',e:'12.50 PM'},{id:'V',s:'1.30 PM',e:'2.20 PM'},{id:'VI',s:'2.20 PM',e:'3.00 PM'},{id:'VII',s:'3.05 PM',e:'3.45 PM'},{id:'VIII',s:'3.45 PM',e:'4.25 PM'}];
+  legend=[{code:'VEC344',desc:'Applied Electronics',c:0},{code:'EC2451',desc:'Research Lab',c:1},{code:'EC2257',desc:'Communication Systems',c:2},{code:'VEC345',desc:'Digital Systems',c:3},{code:'COUN',desc:'Counselling',c:4},{code:'TM5',desc:'Training Module 5',c:7}];
+  buildTable(); renderLegend(); toast('✓ Reset complete');
+}
+
+/* ── UTILITIES ───────────────────────────────────────────── */
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2700);}
+function updateBadge(){const d=new Date(),ns=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];document.getElementById('dayBadge').textContent=ns[d.getDay()]+' · '+d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});}
+
+// Close modals on outside click
+document.getElementById('slotModal').onclick=e=>{if(e.target===document.getElementById('slotModal'))closeSlotModal();};
+document.getElementById('legendModal').onclick=e=>{if(e.target===document.getElementById('legendModal'))closeLegendModal();};
+
+/* ── INIT ────────────────────────────────────────────────── */
+buildTable();
+renderLegend();
+</script>
+</body>
+</html>
